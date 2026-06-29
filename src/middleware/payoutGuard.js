@@ -8,7 +8,6 @@ const payoutRateLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
   skip: (req) => req.method !== 'POST',
   handler: (req, res, next, options) => {
     appLogger.warn('Payout rate limit exceeded', {
