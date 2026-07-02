@@ -24,19 +24,16 @@ const payoutCreateSchema = Joi.object({
 });
 
 const payoutCallbackSchema = Joi.object({
-  mch_id: Joi.string().required(),
-  mch_transferId: Joi.string().required(),
-  transfer_amount: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
-  trade_status: Joi.string().required(),
+  merNo: Joi.string().required(),
+  merTransferId: Joi.string().required(),
+  transferAmount: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
+  tradeResult: Joi.string().required(),
+  tradeNo: Joi.string().optional(),
   sign: Joi.string().required(),
-  sign_type: Joi.string().optional(),
-  platId: Joi.string().optional(),
-  apply_date: Joi.string().optional(),
-  receive_account: Joi.string().optional(),
-  receive_name: Joi.string().optional(),
-  bank_code: Joi.string().optional(),
-  remark: Joi.string().optional(),
-  error_msg: Joi.string().optional().allow(''),
+  signType: Joi.string().optional(),
+  applyDate: Joi.string().optional(),
+  version: Joi.string().optional(),
+  respCode: Joi.string().optional(),
 }).unknown(true);
 
 function validate(schema, data) {

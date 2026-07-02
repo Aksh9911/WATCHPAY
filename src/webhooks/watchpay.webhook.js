@@ -19,7 +19,7 @@ const SEP = '====================================';
 function verifyCallbackSign(body, privateKey) {
   const params = { ...body };
   delete params.sign;
-  delete params.sign_type;
+  delete params.signType;
 
   const sorted = Object.keys(params)
     .sort()
@@ -61,14 +61,14 @@ async function handlePayoutCallback(req, res) {
     rawBody: JSON.stringify(rawBody),
   });
 
-  if (!rawBody || !rawBody.mch_transferId || !rawBody.sign) {
+  if (!rawBody || !rawBody.merTransferId || !rawBody.sign) {
     payoutErrorLogger.error('WatchPay callback missing required fields', {
       traceId,
       timestamp,
       sourceIP,
       rawBody,
     });
-    console.error(`[WATCHPAY CALLBACK ERROR] Missing required fields: mch_transferId or sign`);
+    console.error(`[WATCHPAY CALLBACK ERROR] Missing required fields: merTransferId or sign`);
     return res.status(400).send('FAIL');
   }
 
@@ -86,7 +86,7 @@ async function handlePayoutCallback(req, res) {
   console.log('  WATCHPAY CALLBACK SIGNATURE VERIFY');
   console.log(SEP);
   console.log(`  TraceId      : ${traceId}`);
-  console.log(`  MchTransferId: ${rawBody.mch_transferId}`);
+  console.log(`  MerTransferId: ${rawBody.merTransferId}`);
   console.log(`  ReceivedSign : ${rawBody.sign}`);
   console.log(`  ExpectedSign : ${expectedSign}`);
   console.log(`  QueryString  : ${queryString}`);
@@ -98,7 +98,7 @@ async function handlePayoutCallback(req, res) {
       timestamp,
       traceId,
       sourceIP,
-      mchTransferId: rawBody.mch_transferId,
+      merTransferId: rawBody.merTransferId,
       receivedSign: rawBody.sign,
       expectedSign,
       queryString,
@@ -121,17 +121,17 @@ async function handlePayoutCallback(req, res) {
     return res.status(422).send('FAIL');
   }
 
-  const { mch_transferId, trade_status } = parsed;
-  const isDup = isDuplicatePayout(mch_transferId, trade_status);
+  const { merTransferId, tradeResult } = parsed;
+  const isDup = isDuplicatePayout(merTransferId, tradeResult);
   const duplicateCheckResult = isDup ? 'DUPLICATE' : 'NEW';
 
   payoutWebhookLogger.info('WatchPay callback processed', {
     timestamp,
     traceId,
     sourceIP,
-    mchTransferId: mch_transferId,
-    tradeStatus: trade_status,
-    tradeAmount: parsed.transfer_amount,
+    merTransferId: merTransferId,
+    tradeResult: tradeResult,
+    tradeAmount: parsed.transferAmount,
     receivedSign: rawBody.sign,
     signVerification: 'VALID',
     duplicateCheckResult,
@@ -143,20 +143,20 @@ async function handlePayoutCallback(req, res) {
     traceId,
     timestamp,
     sourceIP,
-    mchTransferId: mch_transferId,
-    tradeStatus: trade_status,
+    mchTransferId: merTransferId,
+    tradeStatus: tradeResult,
     duplicateCheckResult,
     rawBody: JSON.stringify(rawBody),
   });
 
   if (isDup) {
-    console.log(`[WATCHPAY CALLBACK] Duplicate callback for mch_transferId: ${mch_transferId}, status: ${trade_status} — skipped`);
+    console.log(`[WATCHPAY CALLBACK] Duplicate callback for merTransferId: ${merTransferId}, status: ${tradeResult} — skipped`);
     return res.status(200).send('SUCCESS');
   }
 
-  markPayoutProcessed(mch_transferId, trade_status);
+  markPayoutProcessed(merTransferId, tradeResult);
 
-  const statusStr = String(trade_status).toUpperCase();
+  const statusStr = String(tradeResult).toUpperCase();
   let dbStatus;
   if (statusStr === 'SUCCESS' || statusStr === '1') {
     dbStatus = 1;
@@ -170,29 +170,29 @@ async function handlePayoutCallback(req, res) {
   console.log('  WATCHPAY CALLBACK — DB UPDATE');
   console.log(SEP);
   console.log(`  TraceId       : ${traceId}`);
-  console.log(`  MchTransferId : ${mch_transferId}`);
-  console.log(`  TradeStatus   : ${trade_status}`);
+  console.log(`  MerTransferId : ${merTransferId}`);
+  console.log(`  TradeResult   : ${tradeResult}`);
   console.log(`  DBStatus      : ${dbStatus}`);
-  console.log(`  Amount        : ${parsed.transfer_amount}`);
-  console.log(`  ErrorMsg      : ${parsed.error_msg || 'N/A'}`);
+  console.log(`  Amount        : ${parsed.transferAmount}`);
+  console.log(`  ErrorMsg      : ${parsed.respCode || 'N/A'}`);
   console.log(`${SEP}\n`);
 
   try {
-    await updateWithdrawlStatusByTradeNo(mch_transferId, dbStatus);
+    await updateWithdrawlStatusByTradeNo(merTransferId, dbStatus);
     payoutWebhookLogger.info('Withdrawl status updated via callback', {
       traceId,
-      mchTransferId: mch_transferId,
+      merTransferId: merTransferId,
       dbStatus,
     });
-    console.log(`[WATCHPAY CALLBACK] DB updated: mch_transferId=${mch_transferId}, dbStatus=${dbStatus}`);
+    console.log(`[WATCHPAY CALLBACK] DB updated: merTransferId=${merTransferId}, dbStatus=${dbStatus}`);
   } catch (dbErr) {
     payoutErrorLogger.error('Failed to update withdrawl status via callback', {
       traceId,
-      mchTransferId: mch_transferId,
+      merTransferId: merTransferId,
       dbStatus,
       error: dbErr.message,
     });
-    console.error(`[WATCHPAY CALLBACK DB ERROR] mch_transferId=${mch_transferId} | ${dbErr.message}`);
+    console.error(`[WATCHPAY CALLBACK DB ERROR] merTransferId=${merTransferId} | ${dbErr.message}`);
   }
 
   return res.status(200).send('SUCCESS');
