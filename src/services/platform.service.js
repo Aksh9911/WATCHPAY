@@ -110,4 +110,109 @@ async function processPayoutSuccess({ withdrawId, traceId }) {
   }
 }
 
-module.exports = { processPayoutSuccess, updateWithdrawStatus };
+/**
+ * Refund withdrawn amount on payout reject/fail via PUT /api/user/wallet/balance
+ * (same add-funds API used on payin success — exact amount, no bonus).
+ */
+async function refundFailedPayout({ userId, amount, cryptoname = 'INR', withdrawId, morderId, traceId }) {
+  const url = `${PLATFORM_BASE_URL}/api/user/wallet/balance`;
+  const refundAmount = Number(amount);
+  const body = {
+    userId,
+    cryptoname: cryptoname || 'INR',
+    balance: refundAmount,
+  };
+
+  appLogger.info('Platform API: refundFailedPayout request', {
+    traceId,
+    url,
+    body,
+    withdrawId,
+    morderId,
+    timestamp: new Date().toISOString(),
+  });
+
+  console.log(`\n${SEP}`);
+  console.log('  PLATFORM API — PAYOUT REFUND');
+  console.log(SEP);
+  console.log(`  TraceId    : ${traceId}`);
+  console.log(`  UserId     : ${userId}`);
+  console.log(`  WithdrawId : ${withdrawId}`);
+  console.log(`  MorderId   : ${morderId}`);
+  console.log(`  Amount     : ${refundAmount}`);
+  console.log(`  URL        : PUT ${url}`);
+  console.log(`${SEP}\n`);
+
+  try {
+    const response = await axios.put(url, body, {
+      headers: getPlatformHeaders(traceId),
+      timeout: 15000,
+    });
+
+    appLogger.info('Platform API: refundFailedPayout response', {
+      traceId,
+      withdrawId,
+      morderId,
+      httpStatus: response.status,
+      data: response.data,
+      timestamp: new Date().toISOString(),
+    });
+
+    payoutWebhookLogger.info('Platform wallet refunded after failed payout', {
+      traceId,
+      withdrawId,
+      morderId,
+      userId,
+      amount: refundAmount,
+      response: response.data,
+    });
+
+    console.log(`\n${SEP}`);
+    console.log('  PLATFORM API — PAYOUT REFUND ✓');
+    console.log(SEP);
+    console.log(`  TraceId    : ${traceId}`);
+    console.log(`  UserId     : ${userId}`);
+    console.log(`  Amount     : ${refundAmount}`);
+    console.log(`  Response   : ${JSON.stringify(response.data)}`);
+    console.log(`${SEP}\n`);
+
+    return { success: true, data: response.data };
+  } catch (err) {
+    systemErrorLogger.error('Platform payout refund failed', {
+      traceId,
+      withdrawId,
+      morderId,
+      userId,
+      amount: refundAmount,
+      errorType: err.code || 'PLATFORM_REFUND_ERROR',
+      errorMessage: err.message,
+      stackTrace: err.stack,
+      timestamp: new Date().toISOString(),
+      action: 'MANUAL_INTERVENTION_REQUIRED',
+    });
+
+    console.error(`\n${SEP}`);
+    console.error('  [CRITICAL] PLATFORM PAYOUT REFUND FAILED');
+    console.error(SEP);
+    console.error(`  TraceId    : ${traceId}`);
+    console.error(`  UserId     : ${userId}`);
+    console.error(`  WithdrawId : ${withdrawId}`);
+    console.error(`  Amount     : ${refundAmount}`);
+    console.error(`  Error      : ${err.message}`);
+    console.error(`  *** MANUAL INTERVENTION REQUIRED ***`);
+    console.error(`${SEP}\n`);
+
+    payoutErrorLogger.error('Platform payout refund failed', {
+      traceId,
+      withdrawId,
+      morderId,
+      userId,
+      amount: refundAmount,
+      error: err.message,
+    });
+
+    throw err;
+  }
+}
+
+module.exports = { processPayoutSuccess, updateWithdrawStatus, refundFailedPayout };
