@@ -6,8 +6,7 @@ const crypto = require('crypto');
 const { getConfig } = require('../config/watchpay.config');
 const { validatePayoutCallback } = require('../validators/watchpay.validator');
 const { isDuplicatePayout, markPayoutProcessed } = require('../storage/webhookCache');
-const { updateWithdrawlStatusByTradeNo, getWithdrawlByMorderId } = require('../models/withdrawl.model');
-const { refundFailedPayout } = require('../services/platform.service');
+const { updateWithdrawlStatusByTradeNo } = require('../models/withdrawl.model');
 const {
   payoutWebhookLogger,
   payoutErrorLogger,
@@ -179,70 +178,15 @@ async function handlePayoutCallback(req, res) {
   console.log(`${SEP}\n`);
 
   try {
-    if (dbStatus === 2) {
-      const withdrawl = await getWithdrawlByMorderId(merTransferId);
-
-      if (!withdrawl) {
-        payoutErrorLogger.error('Payout failed but withdrawl not found for refund', {
-          traceId,
-          merTransferId,
-        });
-        await updateWithdrawlStatusByTradeNo(merTransferId, dbStatus);
-      } else if (Number(withdrawl.status) === 2) {
-        payoutWebhookLogger.info('Already failed — skip refund', {
-          traceId,
-          merTransferId,
-          withdrawId: withdrawl.id,
-        });
-        console.log(`[WATCHPAY CALLBACK] Already failed — skip refund: merTransferId=${merTransferId}`);
-      } else {
-        try {
-          await refundFailedPayout({
-            userId: withdrawl.userId,
-            amount: withdrawl.balance,
-            cryptoname: withdrawl.cryptoname || 'INR',
-            withdrawId: withdrawl.id,
-            morderId: merTransferId,
-            traceId,
-          });
-          payoutWebhookLogger.info('Wallet refunded after failed payout', {
-            traceId,
-            merTransferId,
-            withdrawId: withdrawl.id,
-            userId: withdrawl.userId,
-            amount: withdrawl.balance,
-          });
-          console.log(`[WATCHPAY CALLBACK] Wallet refunded: userId=${withdrawl.userId}, amount=${withdrawl.balance}`);
-        } catch (refundErr) {
-          payoutErrorLogger.error('CRITICAL: Payout failed but wallet refund FAILED', {
-            traceId,
-            merTransferId,
-            withdrawId: withdrawl.id,
-            userId: withdrawl.userId,
-            amount: withdrawl.balance,
-            error: refundErr.message,
-          });
-          console.error(`[WATCHPAY CALLBACK REFUND ERROR] merTransferId=${merTransferId} | ${refundErr.message}`);
-          return res.status(200).send('SUCCESS');
-        }
-
-        await updateWithdrawlStatusByTradeNo(merTransferId, dbStatus);
-        payoutWebhookLogger.info('Withdrawl status updated via callback after refund', {
-          traceId,
-          merTransferId,
-          dbStatus,
-        });
-        console.log(`[WATCHPAY CALLBACK] DB updated after refund: merTransferId=${merTransferId}, dbStatus=${dbStatus}`);
-      }
-    } else {
-      await updateWithdrawlStatusByTradeNo(merTransferId, dbStatus);
-      payoutWebhookLogger.info('Withdrawl status updated via callback', {
-        traceId,
-        merTransferId: merTransferId,
-        dbStatus,
-      });
-      console.log(`[WATCHPAY CALLBACK] DB updated: merTransferId=${merTransferId}, dbStatus=${dbStatus}`);
-    }
+    // On fail/reject: update status + rejected_by=2 only — no auto-refund (manual credit)
+    await updateWithdrawlStatusByTradeNo(merTransferId, dbStatus);
+    payoutWebhookLogger.info('Withdrawl status updated via callback', {
+      traceId,
+      merTransferId,
+      dbStatus,
+      note: dbStatus === 2 ? 'no auto-refund — manual credit required' : undefined,
+    });
+    console.log(`[WATCHPAY CALLBACK] DB updated: merTransferId=${merTransferId}, dbStatus=${dbStatus}`);
   } catch (dbErr) {
     payoutErrorLogger.error('Failed to update withdrawl status via callback', {
       traceId,

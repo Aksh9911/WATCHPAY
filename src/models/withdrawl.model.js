@@ -40,10 +40,13 @@ async function getWithdrawlByMorderId(morderId) {
 }
 
 async function updateWithdrawlStatusByTradeNo(tradeNo, status) {
-  const sql = `UPDATE withdrawl SET status = ? WHERE morder_id = ?`;
+  const sql =
+    Number(status) === 2
+      ? `UPDATE withdrawl SET status = ?, rejected_by = 2 WHERE morder_id = ?`
+      : `UPDATE withdrawl SET status = ? WHERE morder_id = ?`;
   try {
     const [result] = await pool.execute(sql, [status, tradeNo]);
-    appLogger.info('Withdrawl status updated', { tradeNo, status });
+    appLogger.info('Withdrawl status updated', { tradeNo, status, rejected_by: Number(status) === 2 ? 2 : undefined });
     return result;
   } catch (err) {
     appLogger.error('Failed to update withdrawl status', { error: err.message, tradeNo, status });
