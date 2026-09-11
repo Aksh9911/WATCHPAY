@@ -26,15 +26,25 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.status(404).type('text/plain').send('Page not existed');
+});
+
+app.all('/api/docs', (req, res) => {
+  res.status(404).type('text/plain').send('Page not existed');
+});
+app.all('/swagger', (req, res) => {
+  res.status(404).type('text/plain').send('Page not existed');
+});
+app.all('/docs', (req, res) => {
+  res.status(404).type('text/plain').send('Page not existed');
+});
+
 app.use('/api/watchpay', watchpayRoutes);
 app.use('/webhooks/watchpay', webhookRoutes);
 
 app.use((req, res) => {
-  res.status(404).json({
-    status: 'error',
-    message: `Route ${req.method} ${req.originalUrl} not found`,
-    traceId: req.traceId,
-  });
+  res.status(404).type('text/plain').send('Page not existed');
 });
 
 app.use(errorHandler);
