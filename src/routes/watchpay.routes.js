@@ -3,8 +3,8 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/watchpay.controller');
-const { payoutRateLimiter } = require('../middleware/payoutGuard');
+const { payoutRateLimiter, requirePayoutSecret } = require('../middleware/payoutGuard');
 
-router.post('/payout/create', payoutRateLimiter, controller.payoutCreate);
+router.post('/payout/create', requirePayoutSecret, payoutRateLimiter, controller.payoutCreate);
 
 module.exports = router;
