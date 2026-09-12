@@ -40,7 +40,7 @@ function requirePayoutSecret(req, res, next) {
     (req.query && req.query.payoutSecret);
 
   if (provided == null || typeof provided !== 'string' || !provided.trim()) {
-    return res.status(401).json({
+    return res.status(403).json({
       success: false,
       status: 'error',
       message: 'Invalid or missing payout secret',
@@ -50,7 +50,7 @@ function requirePayoutSecret(req, res, next) {
   const a = Buffer.from(provided.trim(), 'utf8');
   const b = Buffer.from(String(expected).trim(), 'utf8');
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return res.status(401).json({
+    return res.status(403).json({
       success: false,
       status: 'error',
       message: 'Invalid or missing payout secret',
